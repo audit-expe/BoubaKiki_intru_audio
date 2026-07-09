@@ -268,7 +268,7 @@ timeline.push({
         document.getElementById("demo-error").textContent = "Please enter age as a number.";
         return;
       }
-
+      participant_info.prolific_id = participant.prolific_id;
       jsPsych.data.addProperties(participant);
 
       jsPsych.finishTrial({
