@@ -295,7 +295,28 @@ function addSequenceToTimeline(sequenceName, audioList, trial, trial_index) {
 }
 
 const TASK_PAIRS = makeOrderedPairsWithinSteps(TASK_STEPS, false);
-const CATCH_PAIRS = makeOrderedPairsWithinSteps(CATCH_STEPS, true);
+const CATCH_PAIRS = [
+  {
+    continuum: CONTINUUM,
+    base_step: 2,
+    intruder_step: 7,
+    base_stim: stimName(2),
+    intruder_stim: stimName(7),
+    no_intruder: false,
+    catch_trial: true,
+    pair_id: `catch_base_${stimName(2)}__intruder_${stimName(7)}`
+  },
+  {
+    continuum: CONTINUUM,
+    base_step: 7,
+    intruder_step: 2,
+    base_stim: stimName(7),
+    intruder_stim: stimName(2),
+    no_intruder: false,
+    catch_trial: true,
+    pair_id: `catch_base_${stimName(7)}__intruder_${stimName(2)}`
+  }
+];
 const RANDOMIZED_TRIALS = jsPsych.randomization.shuffle(TASK_PAIRS.concat(CATCH_PAIRS)).map(instantiateTrial);
 
 RANDOMIZED_TRIALS.forEach((trial, idx) => {
