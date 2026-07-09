@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Oddball Sequence Task - stim78</title>
+
+  <script src="https://unpkg.com/jspsych@7.3.4"></script>
+  <script src="https://unpkg.com/@jspsych/plugin-html-keyboard-response@1.1.3"></script>
+  <script src="https://unpkg.com/@jspsych/plugin-audio-keyboard-response@1.1.3"></script>
+  <script src="https://unpkg.com/@jspsych/plugin-survey-html-form@1.0.3"></script>
+  <script src="https://unpkg.com/@jspsych/plugin-preload@1.1.3"></script>
+  <script src="https://unpkg.com/@jspsych-contrib/plugin-pipe@0.4.0"></script>
+
+  <link href="https://unpkg.com/jspsych@7.3.4/css/jspsych.css" rel="stylesheet" type="text/css" />
+
+  <style>
+    body { background: #f8f8f8; }
+    .task-box { max-width: 850px; margin: auto; font-size: 20px; line-height: 1.5; }
+    .fixation { font-size: 48px; }
+    .sequence-label { font-size: 34px; font-weight: bold; }
+    .small { font-size: 16px; color: #555; }
+    .response-buttons { display: flex; justify-content: center; gap: 24px; margin-top: 30px; flex-wrap: wrap; }
+    .response-button { font-size: 21px; padding: 18px 36px; border: 2px solid #333; border-radius: 10px; background: white; cursor: pointer; }
+    .response-button:hover { background: #e9e9e9; }
+    code { background: #eee; padding: 2px 5px; border-radius: 4px; }
+  </style>
+</head>
+
+<body></body>
+
+<script>
+
+// ===========================
+// CONFIG TO EDIT IF NEEDED
+// ===========================
+const CONTINUUM = "stim78";
+const TASK_STEPS = [9, 10, 11, 12, 13];
+const CATCH_STEPS = [2, 7];
+const AUDIO_EXTENSION = ".wav";
+
+// "" = audio files in the same folder as the HTML file.
+// "audio/" = audio files in an audio subfolder.
+const AUDIO_BASE_PATH = "";
+
+const DATAPIPE_EXPERIMENT_ID = "EU7QSKSrFgFH";
+const PROLIFIC_COMPLETION_URL = "https://app.prolific.com/submissions/complete?cc=C3W7VDR6";
+
+const FIXATION_MS = 500;
+const SEQUENCE_LABEL_MS = 700;
+const ISI_MS = 300;
+const BETWEEN_SEQUENCES_MS = 900;
+
+// ===========================
+// HELPERS
+// ===========================
+function audioPath(stimName) {
+  return `${AUDIO_BASE_PATH}${stimName}${AUDIO_EXTENSION}`;
+}
+
+function stimName(step) {
+  return `${CONTINUUM}_${step}`;
+}
+
+function getUrlParam(name) {
+  return new URLSearchParams(window.location.search).get(name) || "";
+}
+
+function sample(arr) {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+// Ordered pairs within TASK_STEPS, including same-same trials.
+// Examples included:
+// base=9 / intruder=10
+// base=10 / intruder=9
+// base=9 / intruder=9 = no intruder
+function makeOrderedPairsWithinSteps(steps, isCatch = false) {
+  const pairs = [];
+  for (const base of steps) {
+    for (const intruder of steps) {
+      const no_intruder = base === intruder;
+      pairs.push({
+        continuum: CONTINUUM,
+        base_step: base,
+        intruder_step: intruder,
+        base_stim: stimName(base),
+        intruder_stim: stimName(intruder),
+        no_intruder: no_intruder,
+        catch_trial: isCatch,
+        pair_id: `${isCatch ? "catch_" : ""}base_${stimName(base)}__intruder_${stimName(intruder)}`
+      });
+    }
+  }
+  return pairs;
+}
+
+function instantiateTrial(pair) {
+  const seqA = [pair.base_step, pair.base_step, pair.base_step, pair.base_step];
+  const seqB = [pair.base_step, pair.base_step, pair.base_step, pair.base_step];
+
+  const odd_sequence = sample(["A", "B"]);
+  const odd_position = sample([1, 2, 3, 4]);
+  const correct_response = odd_sequence === "A" ? "sequence_1" : "sequence_2";
+
+  // If base === intruder, this is a no-difference trial.
+  // We still assign a nominal odd_sequence and odd_position so the design remains balanced,
+  // but the actual audio sequences are identical.
+  if (!pair.no_intruder) {
+    if (odd_sequence === "A") {
+      seqA[odd_position - 1] = pair.intruder_step;
+    } else {
+      seqB[odd_position - 1] = pair.intruder_step;
+    }
+  }
+
+  return {
+    ...pair,
+    odd_sequence: odd_sequence,
+    correct_response: correct_response,
+    odd_position: odd_position,
+    sequence_a_steps: seqA.join("_"),
+    sequence_b_steps: seqB.join("_"),
+    sequence_a_stims: seqA.map(stimName).join("_"),
+    sequence_b_stims: seqB.map(stimName).join("_"),
+    sequence_a_audio: seqA.map(step => audioPath(stimName(step))),
+    sequence_b_audio: seqB.map(step => audioPath(stimName(step)))
+  };
+}
+
+// ===========================
+// PARTICIPANT INFO
+// ===========================
+const participant_info = {
+  prolific_id: getUrlParam("PROLIFIC_PID"),
+  study_id: getUrlParam("STUDY_ID"),
+  session_id: getUrlParam("SESSION_ID"),
+  continuum: CONTINUUM,
+  task_name: "oddball_sequence"
+};
+
+const jsPsych = initJsPsych({
+  show_progress_bar: true,
+  auto_update_progress_bar: true,
+  on_finish: function() {
+    if (DATAPIPE_EXPERIMENT_ID === "PUT_YOUR_DATAPIPE_EXPERIMENT_ID_HERE") {
+      jsPsych.data.get()
+        .filterCustom(row => row.section === "participant_information" || row.section === "response")
+        .localSave('csv', `oddball_sequence_${CONTINUUM}_${participant_info.prolific_id || 'no_prolific_id'}.csv`);
+    }
+  }
+});
+
+const timeline = [];
+
+const AUDIO_FILES = [...TASK_STEPS, ...CATCH_STEPS].map(step => audioPath(stimName(step)));
+
+timeline.push({
+  type: jsPsychPreload,
+  audio: AUDIO_FILES,
+  message: '<div class="task-box"><p>Loading sounds...</p><p class="small">Please wait.</p></div>',
+  error_message: `<div class="task-box"><p><strong>Some audio files could not be loaded.</strong></p><p>Please check the filenames and the value of <code>AUDIO_BASE_PATH</code>.</p><p class="small">Current base path: <code>${AUDIO_BASE_PATH || "same folder as HTML"}</code></p></div>`,
+  continue_after_error: false
+});
+
+timeline.push({
+  type: jsPsychSurveyHtmlForm,
+  preamble: `<div class="task-box"><h2>Participant information</h2></div>`,
+  html: `
+  <div style="display:grid;gap:18px;max-width:650px;margin:auto;">
+    <div>
+      <label><strong>Prolific ID</strong></label><br>
+      <input name="prolific_id_typed" type="text" value="${participant_info.prolific_id}" required style="width:100%;padding:10px;font-size:16px;">
+    </div>
+
+    <div>
+      <label><strong>Age</strong></label><br>
+      <input name="age" type="number" min="18" max="99" required style="width:120px;padding:10px;font-size:16px;">
+    </div>
+
+    <div>
+      <label><strong>Gender</strong></label><br>
+      <label><input type="radio" name="gender" value="female" required> female</label><br>
+      <label><input type="radio" name="gender" value="male"> male</label><br>
+      <label><input type="radio" name="gender" value="non-binary"> non-binary</label><br>
+      <label><input type="radio" name="gender" value="prefer not to say"> prefer not to say</label>
+    </div>
+
+    <div>
+      <label><strong>Connection to music</strong></label><br>
+      <label><input type="radio" name="music_connection" value="musician" required> musician</label><br>
+      <label><input type="radio" name="music_connection" value="audio professional"> audio professional</label><br>
+      <label><input type="radio" name="music_connection" value="neither"> neither</label>
+    </div>
+  </div>
+  `,
+  button_label: 'Continue',
+  data: { section: 'participant_information', ...participant_info }
+});
+
+timeline.push({
+  type: jsPsychHtmlKeyboardResponse,
+  stimulus: `<div class="task-box">
+    <h2>Audio sequence task</h2>
+    <p>You will hear two sequences of sounds: <strong>Sequence 1</strong> and <strong>Sequence 2</strong>.</p>
+    <p>Each sequence contains 4 sounds.</p>
+    <p>One of the two sequences contains one sound that may be different from the others.</p>
+    <p>Your task is to decide whether this sound was in <strong>Sequence 1</strong> or in <strong>Sequence 2</strong>.</p>
+    <p>You can click the buttons or use the keyboard:</p>
+    <p><strong>Left arrow = Sequence 1</strong><br><strong>Right arrow = Sequence 2</strong></p>
+    <p class="small">Please use headphones and keep your volume at a comfortable level.</p>
+    <p>Press any key to start.</p>
+  </div>`,
+  choices: 'ALL_KEYS',
+  data: { section: 'instructions', ...participant_info }
+});
+
+function responseTrial(trial) {
+  let trialStart = null;
+  return {
+    type: jsPsychHtmlKeyboardResponse,
+    choices: ['ArrowLeft', 'ArrowRight'],
+    stimulus: `<div class="task-box">
+      <h2>Where was the different sound?</h2>
+      <div class="response-buttons">
+        <button id="seq1-btn" class="response-button">Sequence 1<br><span class="small">← left</span></button>
+        <button id="seq2-btn" class="response-button">Sequence 2<br><span class="small">right →</span></button>
+      </div>
+    </div>`,
+    on_load: function() {
+      trialStart = performance.now();
+      document.getElementById('seq1-btn').addEventListener('click', () => {
+        jsPsych.finishTrial({ response: 'button_sequence_1', rt: Math.round(performance.now() - trialStart) });
+      });
+      document.getElementById('seq2-btn').addEventListener('click', () => {
+        jsPsych.finishTrial({ response: 'button_sequence_2', rt: Math.round(performance.now() - trialStart) });
+      });
+
+    },
+    on_finish: function(data) {
+      const raw = data.response;
+      let response_clean = null;
+
+      if (raw === 'arrowleft' || raw === 'ArrowLeft' || raw === 'button_sequence_1') response_clean = 'sequence_1';
+      if (raw === 'arrowright' || raw === 'ArrowRight' || raw === 'button_sequence_2') response_clean = 'sequence_2';
+
+      data.raw_response = raw;
+      data.response_clean = response_clean;
+      data.correct = response_clean === trial.correct_response;
+    },
+    data: {
+      section: 'response',
+      ...participant_info,
+      ...trial,
+      sequence_a_audio: trial.sequence_a_audio.join("|"),
+      sequence_b_audio: trial.sequence_b_audio.join("|")
+    }
+  };
+}
+
+function addSequenceToTimeline(sequenceName, audioList, trial, trial_index) {
+  timeline.push({
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: `<div class="task-box"><div class="sequence-label">Sequence ${sequenceName === "A" ? "1" : "2"}</div></div>`,
+    choices: 'NO_KEYS',
+    trial_duration: SEQUENCE_LABEL_MS,
+    data: { section: `sequence_${sequenceName.toLowerCase()}_label`, trial_index: trial_index, ...participant_info, pair_id: trial.pair_id }
+  });
+
+  audioList.forEach((audio, pos) => {
+    timeline.push({
+      type: jsPsychAudioKeyboardResponse,
+      stimulus: audio,
+      choices: 'NO_KEYS',
+      trial_ends_after_audio: true,
+      data: {
+        section: `sequence_${sequenceName.toLowerCase()}_audio`,
+        trial_index: trial_index,
+        sequence_position: pos + 1,
+        ...participant_info,
+        pair_id: trial.pair_id
+      }
+    });
+
+    if (pos < audioList.length - 1) {
+      timeline.push({
+        type: jsPsychHtmlKeyboardResponse,
+        stimulus: '',
+        choices: 'NO_KEYS',
+        trial_duration: ISI_MS,
+        data: { section: `sequence_${sequenceName.toLowerCase()}_isi`, trial_index: trial_index, ...participant_info, pair_id: trial.pair_id }
+      });
+    }
+  });
+}
+
+const TASK_PAIRS = makeOrderedPairsWithinSteps(TASK_STEPS, false);
+const CATCH_PAIRS = makeOrderedPairsWithinSteps(CATCH_STEPS, true);
+const RANDOMIZED_TRIALS = jsPsych.randomization.shuffle(TASK_PAIRS.concat(CATCH_PAIRS)).map(instantiateTrial);
+
+RANDOMIZED_TRIALS.forEach((trial, idx) => {
+  const trial_index = idx + 1;
+
+  timeline.push({
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: '<div class="fixation">+</div>',
+    choices: 'NO_KEYS',
+    trial_duration: FIXATION_MS,
+    data: { section: 'fixation', trial_index: trial_index, ...participant_info, pair_id: trial.pair_id }
+  });
+
+  addSequenceToTimeline("A", trial.sequence_a_audio, trial, trial_index);
+
+  timeline.push({
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: '',
+    choices: 'NO_KEYS',
+    trial_duration: BETWEEN_SEQUENCES_MS,
+    data: { section: 'between_sequences', trial_index: trial_index, ...participant_info, pair_id: trial.pair_id }
+  });
+
+  addSequenceToTimeline("B", trial.sequence_b_audio, trial, trial_index);
+
+  timeline.push(responseTrial({ ...trial, trial_index: trial_index }));
+});
+
+timeline.push({
+  type: jsPsychHtmlKeyboardResponse,
+  stimulus: `<div class="task-box"><h2>Thank you!</h2><p>Your data are being saved.</p></div>`,
+  choices: 'NO_KEYS',
+  trial_duration: 1000,
+  data: { section: 'end_screen', ...participant_info }
+});
+
+if (DATAPIPE_EXPERIMENT_ID !== "PUT_YOUR_DATAPIPE_EXPERIMENT_ID_HERE") {
+  timeline.push({
+    type: jsPsychPipe,
+    action: "save",
+    experiment_id: DATAPIPE_EXPERIMENT_ID,
+    filename: `oddball_sequence_${CONTINUUM}_${participant_info.prolific_id || 'no_prolific_id'}_${Date.now()}.csv`,
+    data_string: () => jsPsych.data.get()
+      .filterCustom(row => row.section === "participant_information" || row.section === "response")
+      .csv()
+  });
+}
+
+timeline.push({
+  type: jsPsychHtmlKeyboardResponse,
+  stimulus: `<div class="task-box"><h2>Finished</h2><p>You can now return to Prolific.</p></div>`,
+  choices: 'NO_KEYS',
+  trial_duration: 1000,
+  on_finish: function() {
+    if (PROLIFIC_COMPLETION_URL !== "PUT_YOUR_PROLIFIC_COMPLETION_URL_HERE") {
+      window.location.href = PROLIFIC_COMPLETION_URL;
+    }
+  },
+  data: { section: 'redirect', ...participant_info }
+});
+
+jsPsych.run(timeline);
+
+</script>
+</html>
