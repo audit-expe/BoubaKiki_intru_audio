@@ -61,6 +61,9 @@ function audioPath(stimName) {
 function stimName(step) {
   return `${CONTINUUM}_${step}`;
 }
+function audioNameFromStep(step, isCatch) {
+  return isCatch ? `${step}` : stimName(step);
+}
 
 function getUrlParam(name) {
   return new URLSearchParams(window.location.search).get(name) || "";
@@ -121,10 +124,10 @@ function instantiateTrial(pair) {
     odd_position: odd_position,
     sequence_a_steps: seqA.join("_"),
     sequence_b_steps: seqB.join("_"),
-    sequence_a_stims: seqA.map(stimName).join("_"),
-    sequence_b_stims: seqB.map(stimName).join("_"),
-    sequence_a_audio: seqA.map(step => audioPath(stimName(step))),
-    sequence_b_audio: seqB.map(step => audioPath(stimName(step)))
+    sequence_a_stims: seqA.map(step => audioNameFromStep(step, pair.catch_trial)).join("_"),
+    sequence_b_stims: seqB.map(step => audioNameFromStep(step, pair.catch_trial)).join("_"),
+    sequence_a_audio: seqA.map(step => audioPath(audioNameFromStep(step, pair.catch_trial))),
+    sequence_b_audio: seqB.map(step => audioPath(audioNameFromStep(step, pair.catch_trial)))
   };
 }
 
@@ -153,7 +156,10 @@ const jsPsych = initJsPsych({
 
 const timeline = [];
 
-const AUDIO_FILES = [...TASK_STEPS, ...CATCH_STEPS].map(step => audioPath(stimName(step)));
+const AUDIO_FILES = [
+  ...TASK_STEPS.map(step => audioPath(stimName(step))),
+  ...CATCH_STEPS.map(step => audioPath(`${step}`))
+];
 
 timeline.push({
   type: jsPsychPreload,
